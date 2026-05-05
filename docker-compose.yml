@@ -1,0 +1,66 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    container_name: smartorder-bot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://smartorder:smartorder@postgres:5432/smartorder
+      REDIS_URL: redis://redis:6379
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smartorder
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartorder-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: smartorder
+      POSTGRES_USER: smartorder
+      POSTGRES_PASSWORD: smartorder
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartorder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartorder
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartorder-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smartorder
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  smartorder:
+    driver: bridge
